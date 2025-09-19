@@ -1,3 +1,4 @@
+name: zmk-keyboard-joystick-wasd
 build:
   settings:
     board_root: .

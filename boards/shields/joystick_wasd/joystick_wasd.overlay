@@ -1,0 +1,76 @@
+#include <dt-bindings/zmk/matrix_transform.h>
+#include "my_keyboard-layouts.dtsi"
+
+/ {
+
+    kscan0: kscan_composite {
+        compatible = "zmk,kscan-composite";
+        rows = <4>;
+        columns = <3>;
+
+        // Include the matrix driver
+        matrix {
+            kscan = <&kscan1>;
+        };
+
+        // Include the direct GPIO driver...
+        direct {
+            kscan = <&kscan2>;
+            row-offset = <3>; // ...and shift it to not overlap
+        };
+    };
+
+    kscan1: kscan_direct {
+        compatible = "zmk,kscan-gpio-direct";
+        wakeup-source;
+        input-gpios
+            = <&gpio0 6  (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
+            , <&gpio0 8  (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
+            ;
+    };
+
+    kscan2: kscan_matrix {
+        compatible = "zmk,kscan-gpio-matrix";
+        diode-direction = "col2row";
+        wakeup-source;
+
+        col-gpios
+            = <&gpio1 0  GPIO_ACTIVE_HIGH>
+            , <&gpio0 11 GPIO_ACTIVE_HIGH>
+            , <&gpio1 4  GPIO_ACTIVE_HIGH>
+            ;
+
+        row-gpios
+            = <&gpio1 1  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+            , <&gpio1 2  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+            , <&gpio1 7  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+            ;
+    };
+
+    default_transform: keymap_transform0 {
+        compatible = "zmk,matrix-transform";
+        columns = <3>; // Length of the "col-gpios" array
+        rows = <4>; // Length of the "row-gpios" array
+        map = <
+        //   Key 1 | Key 2 
+            RC(0,0) RC(0,1)
+        //   Key 3 | Key 4 | Key 5 
+            RC(1,0) RC(1,1) RC(1,2)
+        //   Key 6 | Key 7 | Key 8 
+            RC(2,0) RC(2,1) RC(2,2)
+        //   Key 9 | Key 10| Key 11
+            RC(3,0) RC(3,1) RC(3,2)
+        >;
+    };
+
+    &physical_layout0 {
+        kscan = <&kscan0>; // Label of the kscan node this layout uses
+        transform = <&default_transform>; // Label of the matrix transform this layout uses
+    };
+
+    chosen {
+        zmk,physical-layout = &physical_layout0;
+        // Other chosen items
+    };
+
+};

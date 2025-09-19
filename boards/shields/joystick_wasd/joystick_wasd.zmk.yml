@@ -1,0 +1,9 @@
+file_format: "1"
+id: joystick_wasd
+name: Joystick WASD
+type: shield
+url: https://github.com/letmegobacktosleep/
+requires: [pro_micro]
+features:
+  - keys
+  - studio
