@@ -8,15 +8,21 @@
         rows = <4>;
         columns = <3>;
 
-        // Include the matrix driver
-        matrix {
+        // Include the direct driver
+        direct {
             kscan = <&kscan1>;
         };
 
-        // Include the direct GPIO driver...
-        direct {
+        // Include the matrix GPIO driver...
+        matrix {
             kscan = <&kscan2>;
-            row-offset = <3>; // ...and shift it to not overlap
+            row-offset = <1>; // ...and shift it to not overlap
+        };
+
+        // Include the direct GPIO driver...
+        direct_two {
+            kscan = <&kscan3>;
+            row-offset = <4>; // ...and shift it to not overlap
         };
     };
 
@@ -44,6 +50,15 @@
             = <&gpio1 1  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
             , <&gpio1 2  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
             , <&gpio1 7  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+            ;
+    };
+
+    kscan3: kscan_direct_two {
+        compatible = "zmk,kscan-gpio-direct-two";
+        wakeup-source;
+        input-gpios
+            = <&gpio0 31 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
+            , <&gpio0 2  (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
             ;
     };
 
