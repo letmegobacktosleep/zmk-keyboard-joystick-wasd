@@ -59,11 +59,8 @@
 
     kscan3: kscan_joystick {
         compatible = "zmk,kscan-joystick";
+        io-channels = <&adc 0>, <&adc 7>;
         wakeup-source;
-        io-channels
-            = <&adc 0>
-            , <&adc 7>
-            ;
     };
 
     default_transform: keymap_transform0 {

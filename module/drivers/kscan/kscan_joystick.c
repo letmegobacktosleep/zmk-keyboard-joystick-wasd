@@ -37,19 +37,15 @@ struct kscan_joystick_data {
     struct k_work_delayable work;
     
     // ADC related members
-    const struct device *adc_dev;
-    struct adc_channel_cfg adc_cfg_ch0;
-    struct adc_channel_cfg adc_cfg_ch1;
     int16_t adc_buffer[BUFFER_SIZE];
     struct adc_sequence adc_sequence;
 };
 
 struct kscan_joystick_config {
-    const struct device *adc_dev;
+    struct adc_dt_spec adc_0;
+    struct adc_dt_spec adc_1;
     int32_t idle_period_ms;
     int32_t poll_period_ms;
-    uint8_t adc_channel_0;
-    uint8_t adc_channel_1;
     int16_t angle_offset;
 };
 
@@ -60,9 +56,12 @@ static void kscan_joystick_work_handler(struct k_work *work) {
     const struct kscan_joystick_config *config = dev->config;
     
     int ret;
+
+    // ADC device pointer from config (both channels belong to this device)
+    const struct device *adc_dev = config->adc_0.dev;
     
     // Read ADC values from both channels
-    ret = adc_read(data->adc_dev, &data->adc_sequence);
+    ret = adc_read(adc_dev, &data->adc_sequence);
     if (ret) {
         LOG_ERR("ADC read failed with error %d", ret);
         goto schedule_next;
@@ -137,28 +136,26 @@ static int kscan_joystick_init(const struct device *dev) {
     const struct kscan_joystick_config *config = dev->config;
 
     data->dev = dev;
-    /*
-    This allows accessing the config like so:
-    const struct kscan_joystick_config *config = 
-        (const struct kscan_joystick_config *)data->dev->config;
-    */
-
-    /* Transfer items from config to data
-    data->idle_period_ms = config->idle_period_ms;
-    data->poll_period_ms = config->poll_period_ms;
-    data->angle_offset   = config->angle_offset;
-    */
 
     // Initialize the work queue
     k_work_init_delayable(&data->work, kscan_joystick_work_handler);
 
-    // Get ADC device
-    data->adc_dev = config->adc_dev;
-    if (!device_is_ready(data->adc_dev)) {
-        LOG_ERR("ADC device not ready");
+    // Check both ADC devices are ready (should be same device)
+    if (!device_is_ready(config->adc_0.dev)) {
+        LOG_ERR("ADC device (channel 0) not ready");
         return -ENODEV;
     }
-
+    if (!device_is_ready(config->adc_1.dev)) {
+        LOG_ERR("ADC device (channel 1) not ready");
+        return -ENODEV;
+    }
+    // Optional: check both channels belong to same device for sequence scan
+    __ASSERT(
+        config->adc_0.dev == config->adc_1.dev,
+        "ADC channels belong to different devices"
+    );
+    
+    /*
     // Configure ADC channel 0
     data->adc_cfg_ch0 = (struct adc_channel_cfg){
         .gain = ADC_GAIN,
@@ -181,7 +178,7 @@ static int kscan_joystick_init(const struct device *dev) {
 #if defined(CONFIG_ADC_CONFIGURABLE_INPUTS)
         .input_positive = config->adc_channel_1,
 #endif
-    };
+    };    
 
     // Setup ADC channels
     int ret = adc_channel_setup(data->adc_dev, &data->adc_cfg_ch0);
@@ -195,6 +192,7 @@ static int kscan_joystick_init(const struct device *dev) {
         LOG_ERR("Could not setup ADC channel 1 (%d)", ret);
         return ret;
     }
+    */
 
     // Configure ADC sequence for reading both channels
     data->adc_sequence = (struct adc_sequence){
@@ -245,9 +243,8 @@ static const struct kscan_driver_api kscan_joystick_api = {
     static const struct kscan_joystick_config kscan_joystick_config_##n = {                         \
         .idle_period_ms = DT_INST_PROP_OR(n, idle_period_ms, 100),                                  \
         .poll_period_ms = DT_INST_PROP_OR(n, poll_period_ms, 10),                                   \
-        .adc_dev = DEVICE_DT_GET(DT_IO_CHANNELS_CTLR(DT_DRV_INST(n))),                              \
-        .adc_channel_0 = DT_IO_CHANNELS_INPUT_BY_IDX(DT_DRV_INST(n), 0),                            \
-        .adc_channel_1 = DT_IO_CHANNELS_INPUT_BY_IDX(DT_DRV_INST(n), 1),                            \
+        .adc_0 = ADC_DT_SPEC_GET_BY_IDX(DT_DRV_INST(n), 0),                                         \
+        .adc_1 = ADC_DT_SPEC_GET_BY_IDX(DT_DRV_INST(n), 1),                                         \
         .angle_offset  = DT_INST_PROP_OR(n, angle_offset, 0),                                       \
     };                                                                                              \
                                                                                                     \
@@ -283,17 +280,10 @@ DT_INST_FOREACH_STATUS_OKAY(KSCAN_JOYSTICK_INIT);
  *        io-channels = <&adc1 0>, <&adc1 1>;
  *    };
  * 
- * 3. Also add to your device tree:
- *    / {
- *        aliases {
- *            adc0 = &adc;
- *        };
- *    };
- * 
- * 4. Make sure to enable ADC in your Kconfig:
+ * 3. Make sure to enable ADC in your Kconfig:
  *    CONFIG_ADC=y
  * 
- * 5. Example Key Detection Logic (add to work_handler):
+ * 4. Example Key Detection Logic (add to work_handler):
  *    // Define thresholds
  *    #define KEY_PRESS_THRESHOLD 512
  *    
