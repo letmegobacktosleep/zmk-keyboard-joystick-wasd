@@ -199,7 +199,7 @@ static int kscan_joystick_init(const struct device *dev) {
         .buffer = data->adc_buffer,
         .buffer_size = sizeof(data->adc_buffer),
         .resolution = ADC_RESOLUTION,
-        .channels = BIT(config->adc_channel_0) | BIT(config->adc_channel_1),
+        .channels = BIT(config->adc_0.channel_id) | BIT(config->adc_1.channel_id),
     };
 
     LOG_INF("ADC-based kscan initialized successfully");
