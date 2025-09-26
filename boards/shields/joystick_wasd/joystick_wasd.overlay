@@ -60,6 +60,7 @@
 
     kscan3: kscan_joystick {
         compatible = "zmk,kscan-joystick";
+        status = "okay";
         io-channels = <&adc 0>, <&adc 7>;
         io-channel-names = "x-axis", "y-axis";
         wakeup-source;
