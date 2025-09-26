@@ -237,9 +237,7 @@ static const struct kscan_driver_api kscan_joystick_api = {
     .disable_callback = kscan_joystick_disable,
 };
 
-#pragma message "Node DT_INST:     " DT_STRING_UPPER_TOKEN(DT_INST(n, zmk_kscan_joystick))
-#pragma message "Node DT_DRV_INST: " DT_STRING_UPPER_TOKEN(DT_DRV_INST(n))
-
+#pragma message "Node label: " DT_LABEL(DT_INST(0, zmk_kscan_joystick))
 typedef char __verify_node_id__[(int)DT_NODE_EXISTS(DT_INST(n, zmk_kscan_joystick))];
 
 #define KSCAN_JOYSTICK_INIT(n)                                                                      \
