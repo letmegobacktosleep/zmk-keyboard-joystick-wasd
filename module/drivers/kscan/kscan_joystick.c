@@ -237,14 +237,20 @@ static const struct kscan_driver_api kscan_joystick_api = {
     .disable_callback = kscan_joystick_disable,
 };
 
+#pragma message "Node DT_INST:     " DT_STRING_UPPER_TOKEN(DT_INST(n, zmk_kscan_joystick))
+#pragma message "Node DT_DRV_INST: " DT_STRING_UPPER_TOKEN(DT_DRV_INST(n))
+
+typedef char __verify_node_id__[(int)DT_NODE_EXISTS(DT_INST(n, zmk_kscan_joystick))];
+
 #define KSCAN_JOYSTICK_INIT(n)                                                                      \
+                                                                                                    \
     static struct kscan_joystick_data kscan_joystick_data_##n = {};                                 \
                                                                                                     \
     static const struct kscan_joystick_config kscan_joystick_config_##n = {                         \
         .idle_period_ms = DT_INST_PROP_OR(n, idle_period_ms, 100),                                  \
         .poll_period_ms = DT_INST_PROP_OR(n, poll_period_ms, 10),                                   \
-        .adc_0 = ADC_DT_SPEC_GET_BY_IDX(DT_INST(n, zmk_kscan_joystick), 0),                         \
-        .adc_1 = ADC_DT_SPEC_GET_BY_IDX(DT_INST(n, zmk_kscan_joystick), 1),                         \
+        .adc_0 = ADC_DT_SPEC_GET_BY_IDX(DT_DRV_INST(n), 0),                                         \
+        .adc_1 = ADC_DT_SPEC_GET_BY_IDX(DT_DRV_INST(n), 1),                                         \
         .angle_offset  = DT_INST_PROP_OR(n, angle_offset, 0),                                       \
     };                                                                                              \
                                                                                                     \
