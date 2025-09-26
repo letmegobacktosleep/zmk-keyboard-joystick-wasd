@@ -19,6 +19,11 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #define DT_DRV_COMPAT zmk_kscan_joystick
 
+/* M_PI constant */
+#ifndef MPIf
+#define M_PIf 3.1415927f
+#endif
+
 /* ADC Configuration */
 #define ADC_RESOLUTION  12
 #define ADC_GAIN        ADC_GAIN_1_6
@@ -71,7 +76,7 @@ static void kscan_joystick_work_handler(struct k_work *work) {
     
     // Calculate angle and offset
     float angle_rad = atan2f(y, x);
-    float angle_deg = angle_rad * (180.0f / M_PI);
+    float angle_deg = angle_rad * (180.0f / M_PIf);
     angle_deg = (angle_deg < 0.0f) ? (angle_deg + 360.0f) : angle_deg;
     angle_deg = fmodf(angle_deg + config->angle_offset, 360.0f);
 
