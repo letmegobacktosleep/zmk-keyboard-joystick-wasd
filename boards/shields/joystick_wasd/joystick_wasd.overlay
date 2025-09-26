@@ -30,7 +30,7 @@
         };
     };
 
-    kscan1: kscan_joystick {
+    kscan1: kscan_direct {
         compatible = "zmk,kscan-gpio-direct";
         wakeup-source;
         input-gpios
