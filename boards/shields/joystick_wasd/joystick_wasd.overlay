@@ -1,6 +1,10 @@
 #include <dt-bindings/zmk/matrix_transform.h>
 #include "joystick_wasd-layouts.dtsi"
 
+&adc {
+	status = "okay";
+};
+
 / {
 
     kscan0: kscan_composite {
@@ -26,7 +30,7 @@
         };
     };
 
-    kscan1: kscan_direct {
+    kscan1: kscan_joystick {
         compatible = "zmk,kscan-gpio-direct";
         wakeup-source;
         input-gpios
@@ -53,12 +57,12 @@
             ;
     };
 
-    kscan3: kscan_direct_two {
-        compatible = "zmk,kscan-gpio-direct-two";
+    kscan3: kscan_joystick {
+        compatible = "zmk,kscan-joystick";
         wakeup-source;
-        input-gpios
-            = <&gpio0 31 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
-            , <&gpio0 2  (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
+        io-channels
+            = <&adc 0>
+            , <&adc 7>
             ;
     };
 

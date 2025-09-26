@@ -3,5 +3,4 @@
 
 zephyr_library()
 
-zephyr_library_sources_ifdef(CONFIG_ZMK_KSCAN_GPIO_DRIVER kscan_gpio.c)
-zephyr_library_sources_ifdef(CONFIG_ZMK_KSCAN_GPIO_DIRECT_TWO kscan_gpio_direct_two.c)
+zephyr_library_sources_ifdef(CONFIG_ZMK_KSCAN_JOYSTICK kscan_joystick.c)
