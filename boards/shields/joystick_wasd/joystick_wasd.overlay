@@ -60,6 +60,7 @@
 
     kscan3: kscan_joystick {
         compatible = "zmk,kscan-joystick";
+        poll-period-ms = <1000>;
         status = "okay";
         wakeup-source;
         io-channels = <&adc 0>, <&adc 7>;

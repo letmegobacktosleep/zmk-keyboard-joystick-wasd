@@ -134,75 +134,42 @@ static int kscan_joystick_disable(const struct device *dev) {
 static int kscan_joystick_init(const struct device *dev) {
     struct kscan_joystick_data *data = dev->data;
     const struct kscan_joystick_config *config = dev->config;
+    int err = 0;
 
     data->dev = dev;
 
-    // Initialize the work queue
-    k_work_init_delayable(&data->work, kscan_joystick_work_handler);
+    // Check both channels belong to same device for sequence scan
+    __ASSERT(config->adc_0.dev == config->adc_1.dev,
+        "Both ADC channels must belong to the same device.");
 
-    // Check both ADC devices are ready (should be same device)
-    if (!device_is_ready(config->adc_0.dev)) {
-        LOG_ERR("ADC device (channel 0) not ready");
-        return -ENODEV;
-    }
-    if (!device_is_ready(config->adc_1.dev)) {
-        LOG_ERR("ADC device (channel 1) not ready");
-        return -ENODEV;
-    }
-    // Optional: check both channels belong to same device for sequence scan
-    __ASSERT(
-        config->adc_0.dev == config->adc_1.dev,
-        "ADC channels belong to different devices"
-    );
-    
-    /*
-    // Configure ADC channel 0
-    data->adc_cfg_ch0 = (struct adc_channel_cfg){
-        .gain = ADC_GAIN,
-        .reference = ADC_REFERENCE,
-        .acquisition_time = ADC_ACQUISITION,
-        .channel_id = config->adc_channel_0,
-        .differential = 0,
-#if defined(CONFIG_ADC_CONFIGURABLE_INPUTS)
-        .input_positive = config->adc_channel_0,
-#endif
-    };
+    data->adc_sequence.buffer = data->adc_buffer;
+    data->adc_sequence.buffer_size = sizeof(data->adc_buffer);
 
-    // Configure ADC channel 1
-    data->adc_cfg_ch1 = (struct adc_channel_cfg){
-        .gain = ADC_GAIN,
-        .reference = ADC_REFERENCE,
-        .acquisition_time = ADC_ACQUISITION,
-        .channel_id = config->adc_channel_1,
-        .differential = 0,
-#if defined(CONFIG_ADC_CONFIGURABLE_INPUTS)
-        .input_positive = config->adc_channel_1,
-#endif
-    };    
+    adc_sequence_init_dt(&config->adc_0, &data->adc_sequence);
+    data->adc_sequence.channels |= BIT(config->adc_1.channel_id);
 
-    // Setup ADC channels
-    int ret = adc_channel_setup(data->adc_dev, &data->adc_cfg_ch0);
-    if (ret) {
-        LOG_ERR("Could not setup ADC channel 0 (%d)", ret);
-        return ret;
+    if (!adc_is_ready_dt(&config->adc_0)) {
+        LOG_ERR("ADC device is not ready");
+        return -EINVAL;
     }
 
-    ret = adc_channel_setup(data->adc_dev, &data->adc_cfg_ch1);
-    if (ret) {
-        LOG_ERR("Could not setup ADC channel 1 (%d)", ret);
-        return ret;
+    err = adc_channel_setup_dt(&config->adc_0);
+    if (err) {
+        LOG_ERR("failed to configure ADC channel 0 (err %d)",
+            err);
+        return err;
     }
-    */
-
-    // Configure ADC sequence for reading both channels
-    data->adc_sequence = (struct adc_sequence){
-        .buffer = data->adc_buffer,
-        .buffer_size = sizeof(data->adc_buffer),
-        .resolution = ADC_RESOLUTION,
-        .channels = BIT(config->adc_0.channel_id) | BIT(config->adc_1.channel_id),
-    };
+    err = adc_channel_setup_dt(&config->adc_1);
+    if (err) {
+        LOG_ERR("failed to configure ADC channel 1 (err %d)",
+            err);
+        return err;
+    }
 
     LOG_INF("ADC-based kscan initialized successfully");
+
+    // Initialize the work queue
+    k_work_init_delayable(&data->work, kscan_joystick_work_handler);
 
 #if IS_ENABLED(CONFIG_PM_DEVICE)
     pm_device_init_suspended(dev);
@@ -211,7 +178,7 @@ static int kscan_joystick_init(const struct device *dev) {
 #endif
 #endif
 
-    return 0;
+    return err;
 }
 
 #if IS_ENABLED(CONFIG_PM_DEVICE)
