@@ -8,4 +8,4 @@ build:
     # Folder containing a "boards" folder (. = root)
     board_root: .
     # Folder containing a "dts" folder (. = root)
-    dts_root: .
+    dts_root: ./module/drivers/.

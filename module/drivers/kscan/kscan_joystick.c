@@ -244,8 +244,8 @@ static const struct kscan_driver_api kscan_joystick_api = {
     static const struct kscan_joystick_config kscan_joystick_config_##n = {                         \
         .idle_period_ms = DT_INST_PROP_OR(n, idle_period_ms, 100),                                  \
         .poll_period_ms = DT_INST_PROP_OR(n, poll_period_ms, 10),                                   \
-        .adc_0 = ADC_DT_SPEC_GET_BY_IDX(DT_DRV_INST(n), 0),                                         \
-        .adc_1 = ADC_DT_SPEC_GET_BY_IDX(DT_DRV_INST(n), 1),                                         \
+        .adc_0 = ADC_DT_SPEC_INST_GET_BY_IDX(n, 0),                                                 \
+        .adc_1 = ADC_DT_SPEC_INST_GET_BY_IDX(n, 1),                                                 \
         .angle_offset  = DT_INST_PROP_OR(n, angle_offset, 0),                                       \
     };                                                                                              \
                                                                                                     \
