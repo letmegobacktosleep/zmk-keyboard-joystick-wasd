@@ -9,11 +9,12 @@
 
     channel@0 {
         reg = <0>;
+        zephyr,input-positive = <NRF_SAADC_AIN0>;
         zephyr,gain = "ADC_GAIN_1";
         zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
         zephyr,resolution = <12>;
-        zephyr,input-positive = <NRF_SAADC_AIN0>;
+        zephyr,oversampling = <0>;
     };
 
     channel@2 {
@@ -23,6 +24,7 @@
         zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
         zephyr,resolution = <12>;
+        zephyr,oversampling = <0>;
     };
 };
 
@@ -80,7 +82,7 @@
 
     kscan3: kscan_joystick {
         compatible = "zmk,kscan-joystick";
-        poll-period-ms = <1000>;
+        poll-period-ms = <100>;
         status = "okay";
         wakeup-source;
         io-channels = <&adc 0>, <&adc 7>;

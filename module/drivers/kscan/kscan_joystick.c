@@ -20,15 +20,11 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define DT_DRV_COMPAT zmk_kscan_joystick
 
 /* M_PI constant */
-#ifndef MPIf
+#ifndef M_PIf
 #define M_PIf 3.1415927f
 #endif
 
 /* ADC Configuration */
-#define ADC_RESOLUTION  12
-#define ADC_GAIN        ADC_GAIN_1_6
-#define ADC_REFERENCE   ADC_REF_INTERNAL
-#define ADC_ACQUISITION ADC_ACQ_TIME_DEFAULT
 #define BUFFER_SIZE 2
 
 struct kscan_joystick_data {
@@ -82,7 +78,7 @@ static void kscan_joystick_work_handler(struct k_work *work) {
     // Calculate magnitude
     float magnitude = sqrtf(x * x + y * y);
 
-    LOG_DBG("ANGLE: %.2f, MAGNITUDE: %.2f", angle_deg, magnitude);
+    // LOG_DBG("ANGLE: %.2f, MAGNITUDE: %.2f", angle_deg, magnitude);
 
     // TODO: Process ADC values to determine key states
     // Example logic:
