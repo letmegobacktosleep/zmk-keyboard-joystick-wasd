@@ -14,17 +14,15 @@
         zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
         zephyr,resolution = <12>;
-        zephyr,oversampling = <0>;
     };
 
-    channel@2 {
+    channel@7 {
         reg = <7>;
         zephyr,input-positive = <NRF_SAADC_AIN7>;
         zephyr,gain = "ADC_GAIN_1";
         zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
         zephyr,resolution = <12>;
-        zephyr,oversampling = <0>;
     };
 };
 

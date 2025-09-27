@@ -24,16 +24,13 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define M_PIf 3.1415927f
 #endif
 
-/* ADC Configuration */
-#define BUFFER_SIZE 2
-
 struct kscan_joystick_data {
     const struct device *dev;
     kscan_callback_t callback;
     struct k_work_delayable work;
     
     // ADC related members
-    int16_t adc_buffer[BUFFER_SIZE];
+    int16_t adc_buffer[2];
     struct adc_sequence adc_sequence;
 };
 
@@ -62,13 +59,14 @@ static void kscan_joystick_work_handler(struct k_work *work) {
         LOG_ERR("ADC read failed with error %d", ret);
         goto schedule_next;
     }
-    
+
+    LOG_DBG("ADC CH0: %d, ADC CH1: %d", (int16_t)data->adc_buffer[0], (int16_t)data->adc_buffer[1]);
+
+    /*
     // Get the ADC values
     float x = (float)data->adc_buffer[0];
     float y = (float)data->adc_buffer[1];
 
-    LOG_DBG("ADC CH0: %d, ADC CH1: %d", data->adc_buffer[0], data->adc_buffer[1]);
-    
     // Calculate angle and offset
     float angle_rad = atan2f(y, x);
     float angle_deg = angle_rad * (180.0f / M_PIf);
@@ -78,7 +76,8 @@ static void kscan_joystick_work_handler(struct k_work *work) {
     // Calculate magnitude
     float magnitude = sqrtf(x * x + y * y);
 
-    // LOG_DBG("ANGLE: %.2f, MAGNITUDE: %.2f", angle_deg, magnitude);
+    LOG_DBG("ANGLE: %.2f, MAGNITUDE: %.2f", angle_deg, magnitude);
+    */
 
     // TODO: Process ADC values to determine key states
     // Example logic:
@@ -219,51 +218,3 @@ static const struct kscan_driver_api kscan_joystick_api = {
                           CONFIG_KSCAN_INIT_PRIORITY, &kscan_joystick_api);
 
 DT_INST_FOREACH_STATUS_OKAY(KSCAN_JOYSTICK_INIT);
-
-/*
- * IMPLEMENTATION GUIDE:
- * 
- * ADC-based Key Scanning:
- * This template now includes ADC initialization and continuous polling of two ADC channels.
- * 
- * Current Implementation:
- * - Initializes ADC device and configures two channels
- * - Continuously polls both ADC channels at configurable intervals
- * - Logs ADC values for debugging
- * 
- * Next Steps for Key Detection:
- * 1. In kscan_joystick_work_handler(), add logic to:
- *    - Compare ADC values against thresholds to determine key states
- *    - Track previous states to detect changes
- *    - Call data->callback(dev, row, col, pressed) for state changes
- * 
- * 2. Device Tree Example:
- *    kscan0: kscan {
- *        compatible = "zmk,kscan-joystick";
- *        poll-period-ms = <20>;
- *        io-channels = <&adc1 0>, <&adc1 1>;
- *    };
- * 
- * 3. Make sure to enable ADC in your Kconfig:
- *    CONFIG_ADC=y
- * 
- * 4. Example Key Detection Logic (add to work_handler):
- *    // Define thresholds
- *    #define KEY_PRESS_THRESHOLD 512
- *    
- *    static bool prev_key0_state = false;
- *    static bool prev_key1_state = false;
- *    
- *    bool key0_pressed = (x > KEY_PRESS_THRESHOLD);
- *    bool key1_pressed = (y > KEY_PRESS_THRESHOLD);
- *    
- *    if (key0_pressed != prev_key0_state) {
- *        data->callback(dev, 0, 0, key0_pressed);
- *        prev_key0_state = key0_pressed;
- *    }
- *    
- *    if (key1_pressed != prev_key1_state) {
- *        data->callback(dev, 0, 1, key1_pressed);
- *        prev_key1_state = key1_pressed;
- *    }
- */
