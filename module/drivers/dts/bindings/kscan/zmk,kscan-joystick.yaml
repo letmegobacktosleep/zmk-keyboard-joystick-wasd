@@ -40,5 +40,5 @@ properties:
     description: The magnitude thresholds (rows) inferred from the joystick.
   hysteris:
     type: int
-    default: 10
+    default: 5
     description: The deadzone when a threshold is passed.

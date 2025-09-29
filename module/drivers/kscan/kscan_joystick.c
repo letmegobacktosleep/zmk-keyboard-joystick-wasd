@@ -259,6 +259,7 @@ static void kscan_joystick_work_handler(struct k_work *work) {
                 }
                 for (uint8_t row = 0; row < config->thresholds_len; row++) {
                     if (row < data->threshold_state) {
+                        // LOG_DBG("STATE: %d, ROW: %d, COL: %d", data->threshold_state, row, col);
                         if (!IS_BIT_SET(data->key_state[row], col)) {
                             data->callback(dev, row, col, true);
                             WRITE_BIT(data->key_state[row], col, 1);
@@ -270,7 +271,6 @@ static void kscan_joystick_work_handler(struct k_work *work) {
                         }
                     }
                 }
-                // LOG_DBG("STATE: %d, ROW: %d, COL: %d", data->threshold_state, row, col);
             }
             else {
                 for (uint8_t row = 0; row < config->thresholds_len; row++) {
@@ -443,8 +443,12 @@ static const struct kscan_driver_api kscan_joystick_api = {
                  "n-directions is less than or equal to zero");                                     \
     BUILD_ASSERT(DT_INST_PROP_OR(n, n_directions, 4) <= 16,                                         \
                  "n-directions is greater than 16");                                                \
-    BUILD_ASSERT(DT_INST_PROP_LEN_OR(n, thresholds, 2) <= 8,                                        \
+    BUILD_ASSERT(DT_INST_PROP_LEN(n, thresholds) > 0,                                               \
+                 "thresholds must have a minimum of 1 member");                                     \
+    BUILD_ASSERT(DT_INST_PROP_LEN(n, thresholds) <= 8,                                              \
                  "thresholds can have a maximum of 8 members");                                     \
+    BUILD_ASSERT(DT_INST_PROP_OR(n, hysteris, 5) < DT_INST_PROP_BY_IDX(n, thresholds, 0),           \
+                 "hysteris must be less than the first threshold value");                           \
                                                                                                     \
     static struct kscan_joystick_data kscan_joystick_data_##n = {};                                 \
                                                                                                     \
@@ -456,7 +460,7 @@ static const struct kscan_driver_api kscan_joystick_api = {
         .angle_offset   = DT_INST_PROP_OR(n, angle_offset, 0),                                      \
         .angle_overlap  = DT_INST_PROP_OR(n, angle_overlap, 0),                                     \
         .n_directions   = DT_INST_PROP_OR(n, n_directions, 4),                                      \
-        .hysteris       = DT_INST_PROP_OR(n, hysteris, 10),                                         \
+        .hysteris       = DT_INST_PROP_OR(n, hysteris, 5),                                          \
         .thresholds_len = DT_INST_PROP_LEN_OR(n, thresholds, 2),                                    \
         .thresholds     = DT_INST_PROP(n, thresholds),                                              \
     };                                                                                              \
