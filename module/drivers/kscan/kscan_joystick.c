@@ -49,17 +49,19 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define KSCAN_JC_SHRINK(n) (((n) * 3) / 4)
 /* Simple moving average constants */
 #define KSCAN_JS_NSAMPLES 8
+/* Angle filter constants */
+#define KSCAN_JA_HYSTERIS 1.0f
 /* Idle timeout threshold */
-#define KSCAN_JI_THRESHOLD 10
-#define KSCAN_JI_NSCANS 100
+#define KSCAN_JI_THRESHOLD 3
+#define KSCAN_JI_NSCANS 1000
 
 struct kscan_joystick_calibration {
     bool is_active;
     uint8_t counter;
     uint16_t samples[KSCAN_JC_NSAMPLES][2];
     int16_t center[2];
-    int16_t min[2];
-    int16_t max[2];
+    int16_t neg_disp[2];
+    int16_t pos_disp[2];
 };
 
 struct kscan_joystick_sma {
@@ -72,19 +74,16 @@ struct kscan_joystick_data {
     kscan_callback_t callback;
     struct k_work_delayable work;
     
-    // ADC related members
-    int16_t adc_buffer[2];
+    // structs
     struct adc_sequence adc_sequence;
     struct kscan_joystick_calibration calibration;
-
-    // SMA related members
     struct kscan_joystick_sma sma;
-
-    // KSCAN related members
-    uint16_t idle_timeout;
-
-    // KEY STATE related members
+    // buffers
+    int16_t adc_buffer[2];
     uint16_t key_state[8];
+    // smaller variables
+    float prev_angle;
+    uint16_t idle_timeout;
     uint8_t threshold_state;
 };
 
@@ -102,20 +101,20 @@ struct kscan_joystick_config {
 };
 
 static bool kscan_joystick_calibration_handler(struct kscan_joystick_calibration *calibration, int16_t x, int16_t y) {
-    // Update min and max
+    // Update maximum displacement from the center
     if (x > calibration->center[0]) {
         // x is greater than the center, update displacement in the positive direction
-        calibration->max[0] = MAX(calibration->max[0], x - calibration->center[0]);
+        calibration->pos_disp[0] = MAX(calibration->pos_disp[0], x - calibration->center[0]);
     } else {
         // x is less than or equal to the center, update displacement in the negative direction
-        calibration->min[0] = MAX(calibration->min[0], calibration->center[0] - x);
+        calibration->neg_disp[0] = MAX(calibration->neg_disp[0], calibration->center[0] - x);
     }
     if (y > calibration->center[1]) {
         // y is greater than the center, update displacement in the positive direction
-        calibration->max[1] = MAX(calibration->max[1], y - calibration->center[1]);
+        calibration->pos_disp[1] = MAX(calibration->pos_disp[1], y - calibration->center[1]);
     } else {
         // y is less than or equal to the center, displacement in the update negative direction
-        calibration->min[1] = MAX(calibration->min[1], calibration->center[1] - y);
+        calibration->neg_disp[1] = MAX(calibration->neg_disp[1], calibration->center[1] - y);
     }
     // Update center
     if (calibration->is_active) {
@@ -133,11 +132,11 @@ static bool kscan_joystick_calibration_handler(struct kscan_joystick_calibration
             // Write the new calibration
             calibration->center[0] = (int16_t)(sum_x / KSCAN_JC_NSAMPLES);
             calibration->center[1] = (int16_t)(sum_y / KSCAN_JC_NSAMPLES);
-            // Shrink the min & max values
-            calibration->min[0] = KSCAN_JC_SHRINK(calibration->min[0]);
-            calibration->max[0] = KSCAN_JC_SHRINK(calibration->max[0]);
-            calibration->min[1] = KSCAN_JC_SHRINK(calibration->min[1]);
-            calibration->max[1] = KSCAN_JC_SHRINK(calibration->max[1]);
+            // Shrink the neg_disp & pos_disp values
+            calibration->neg_disp[0] = KSCAN_JC_SHRINK(calibration->neg_disp[0]);
+            calibration->pos_disp[0] = KSCAN_JC_SHRINK(calibration->pos_disp[0]);
+            calibration->neg_disp[1] = KSCAN_JC_SHRINK(calibration->neg_disp[1]);
+            calibration->pos_disp[1] = KSCAN_JC_SHRINK(calibration->pos_disp[1]);
             // End the calibration
             calibration->counter = 0;
             calibration->is_active = false;
@@ -152,8 +151,8 @@ static bool kscan_joystick_calibration_handler(struct kscan_joystick_calibration
 
 static void kscan_joystick_apply_sma(struct kscan_joystick_sma *sma, int16_t *x, int16_t *y) {
     // Add the values to the buffer
-    sma->buffer[sma->counter][0] = (int16_t)*x;
-    sma->buffer[sma->counter][1] = (int16_t)*y;
+    sma->buffer[sma->counter][0] = *x;
+    sma->buffer[sma->counter][1] = *y;
     // Increment the counter
     sma->counter = (sma->counter + 1) % KSCAN_JS_NSAMPLES;
     // Average the values in the buffer
@@ -165,6 +164,28 @@ static void kscan_joystick_apply_sma(struct kscan_joystick_sma *sma, int16_t *x,
     // Write the averaged value
     *x = (int16_t)(sum_x / KSCAN_JS_NSAMPLES);
     *y = (int16_t)(sum_y / KSCAN_JS_NSAMPLES);
+}
+
+static void kscan_joystick_apply_angle_hysteris(float *angle, float *prev) {
+    float diff = *angle - *prev;
+
+    // Normalise diff, assuming angle is [-180, 180]
+    if (diff > 180.0f) {
+        diff -= 360.0f;
+    } else if (diff < -180.0f) {
+        diff += 360.0f;
+    }
+
+    // Update prev angle to the center of the hysteris
+    if (diff > KSCAN_JA_HYSTERIS) {
+        *prev = *angle - KSCAN_JA_HYSTERIS;
+    } else if (diff < -KSCAN_JA_HYSTERIS) {
+        *prev = *angle + KSCAN_JA_HYSTERIS;
+    }
+
+    // Since prev was updated, we can set angle to prev
+    *angle = *prev;
+    return;
 }
 
 static void kscan_joystick_work_handler(struct k_work *work) {
@@ -201,26 +222,25 @@ static void kscan_joystick_work_handler(struct k_work *work) {
         // Offset the ADC values
         int16_t x = x_raw - calibration->center[0];
         int16_t y = y_raw - calibration->center[1];
-        // Check whether it is in the center
-        if ((abs(x) < KSCAN_JI_THRESHOLD) && (abs(y) < KSCAN_JI_THRESHOLD)) {
-            data->idle_timeout++;
-        } else {
-            data->idle_timeout = 0;
-        }
         // Scale the ADC values between -127 and 127
-        x = (x > calibration->center[0])?
-            ((x * KSCAN_JC_SCALED) / calibration->max[0]):
-            ((x * KSCAN_JC_SCALED) / calibration->min[0]);
-        y = (y > calibration->center[1])?
-            ((y * KSCAN_JC_SCALED) / calibration->max[1]):
-            ((y * KSCAN_JC_SCALED) / calibration->min[1]);
+        x = (x > 0)?
+            ((x * KSCAN_JC_SCALED) / calibration->pos_disp[0]):
+            ((x * KSCAN_JC_SCALED) / calibration->neg_disp[0]);
+        y = (y > 0)?
+            ((y * KSCAN_JC_SCALED) / calibration->pos_disp[1]):
+            ((y * KSCAN_JC_SCALED) / calibration->neg_disp[1]);
 
         // LOG_DBG("CAL ADC CH0: %d, CH1: %d", x, y);
 
         // Calculate angle
         float angle_rad = atan2f((float)y, (float)x);
         float angle_deg = angle_rad * (180.0f / M_PIf);
-        angle_deg = 360.0f + angle_deg + (float)(config->angle_offset);
+        // Apply angle hysteris
+        kscan_joystick_apply_angle_hysteris(&angle_deg, &data->prev_angle);
+        // Offset the angle
+        angle_deg += (float)(config->angle_offset);
+        // Wrap to [0, 360) degrees
+        while (angle_deg < 0.0f) angle_deg += 360.0f;
         angle_deg = fmodf(angle_deg, 360.0f);
 
         // Calculate magnitude
@@ -284,10 +304,18 @@ static void kscan_joystick_work_handler(struct k_work *work) {
                 }
             }
         }
+
+        // Check whether it is in the center
+        if (magnitude < KSCAN_JI_THRESHOLD) {
+            data->idle_timeout++;
+        } else {
+            data->idle_timeout = 0;
+        }
     }
 
     // Schedule next scan at a longer interval
     if (data->idle_timeout > KSCAN_JI_NSCANS) {
+        LOG_DBG("Joystick kscan - switching to low polling rate");
         k_work_reschedule(&data->work, K_MSEC(config->idle_period_ms));
         return;
     }
@@ -328,9 +356,6 @@ static int kscan_joystick_enable(const struct device *dev) {
 static int kscan_joystick_disable(const struct device *dev) {
     struct kscan_joystick_data *data = dev->data;
 
-    // TODO: Implement your disable logic here
-    // This is called when scanning should stop (e.g., for power saving)
-    
     // Cancel any scheduled work
     k_work_cancel_delayable(&data->work);
     
@@ -352,16 +377,17 @@ static int kscan_joystick_init(const struct device *dev) {
     memset(data->key_state, 0, sizeof(data->key_state));
     // Initialise idle timeout
     data->idle_timeout = 0;
-    // Initialise sma filter
+    // Initialise smoothing filters
+    data->prev_angle = 0;
     sma->counter = 0;
     memset(sma->buffer, 0, sizeof(sma->buffer));
     // Initialise calibration variables
     calibration->center[0] = 2047;
     calibration->center[1] = 2047;
-    calibration->min[0] = KSCAN_JC_DEFAULT;
-    calibration->max[0] = KSCAN_JC_DEFAULT;
-    calibration->min[1] = KSCAN_JC_DEFAULT;
-    calibration->max[1] = KSCAN_JC_DEFAULT;
+    calibration->neg_disp[0] = KSCAN_JC_DEFAULT;
+    calibration->pos_disp[0] = KSCAN_JC_DEFAULT;
+    calibration->neg_disp[1] = KSCAN_JC_DEFAULT;
+    calibration->pos_disp[1] = KSCAN_JC_DEFAULT;
     // Trigger a calibration
     calibration->counter = 0;
     calibration->is_active = true;
@@ -444,9 +470,9 @@ static const struct kscan_driver_api kscan_joystick_api = {
     BUILD_ASSERT(DT_INST_PROP_OR(n, n_directions, 4) <= 16,                                         \
                  "n-directions is greater than 16");                                                \
     BUILD_ASSERT(DT_INST_PROP_LEN(n, thresholds) > 0,                                               \
-                 "thresholds must have a minimum of 1 member");                                     \
+                 "thresholds must have between 1 - 8 members");                                     \
     BUILD_ASSERT(DT_INST_PROP_LEN(n, thresholds) <= 8,                                              \
-                 "thresholds can have a maximum of 8 members");                                     \
+                 "thresholds must have between 1 - 8 members");                                     \
     BUILD_ASSERT(DT_INST_PROP_OR(n, hysteris, 5) < DT_INST_PROP_BY_IDX(n, thresholds, 0),           \
                  "hysteris must be less than the first threshold value");                           \
                                                                                                     \
