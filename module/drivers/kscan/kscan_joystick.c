@@ -265,18 +265,19 @@ static void kscan_joystick_work_handler(struct k_work *work) {
         }
         
         // Determine which directions it is facing
-        bool col_0_active = false;
         float segment = (float)(360 / config->n_directions);
-        for (uint8_t i = 0; i <= config->n_directions; i++) {
-            uint8_t col = i % config->n_directions;
+        for (uint8_t col = 0; col < config->n_directions; col++) {
             if (
-                (angle_deg >  ((float)(i - 0.5) * segment) - (float)(config->angle_overlap / 2)) &&
-                (angle_deg <= ((float)(i + 0.5) * segment) + (float)(config->angle_overlap / 2))
+                (
+                    (angle_deg >  ((float)(col - 0.5) * segment) - (float)(config->angle_overlap / 2)) &&
+                    (angle_deg <= ((float)(col + 0.5) * segment) + (float)(config->angle_overlap / 2))
+                ) || (
+                    (col == 0) && // col 0 can close to 0 or 360
+                    (angle_deg >  ((float)(config->n_directions - 0.5) * segment) - (float)(config->angle_overlap / 2)) &&
+                    (angle_deg <= ((float)(config->n_directions + 0.5) * segment) + (float)(config->angle_overlap / 2))
+                )
             ) {
-                // Account for col 0 being read twice
-                if (col == 0) {
-                    col_0_active = true;
-                }
+                // Iterate through each row
                 for (uint8_t row = 0; row < config->thresholds_len; row++) {
                     if (row < data->threshold_state) {
                         // LOG_DBG("STATE: %d, ROW: %d, COL: %d", data->threshold_state, row, col);
@@ -294,10 +295,7 @@ static void kscan_joystick_work_handler(struct k_work *work) {
             }
             else {
                 for (uint8_t row = 0; row < config->thresholds_len; row++) {
-                    if (
-                        (IS_BIT_SET(data->key_state[row], col)) &&
-                        (!(col == 0 && col_0_active))
-                    ) {
+                    if (IS_BIT_SET(data->key_state[row], col)) {
                         data->callback(dev, row, col, false);
                         WRITE_BIT(data->key_state[row], col, 0);
                     }
@@ -315,7 +313,6 @@ static void kscan_joystick_work_handler(struct k_work *work) {
 
     // Schedule next scan at a longer interval
     if (data->idle_timeout > KSCAN_JI_NSCANS) {
-        LOG_DBG("Joystick kscan - switching to low polling rate");
         k_work_reschedule(&data->work, K_MSEC(config->idle_period_ms));
         return;
     }
