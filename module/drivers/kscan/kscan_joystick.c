@@ -48,7 +48,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define KSCAN_JC_DEFAULT 1000
 #define KSCAN_JC_SHRINK(n) (((n) * 3) / 4)
 /* Simple moving average constants */
-#define KSCAN_JS_NSAMPLES 8
+#define KSCAN_JE_ALPHA 0.5f
 /* Angle filter constants */
 #define KSCAN_JA_HYSTERIS 1.0f
 /* Idle timeout threshold */
@@ -64,9 +64,10 @@ struct kscan_joystick_calibration {
     int16_t pos_disp[2];
 };
 
-struct kscan_joystick_sma {
-    uint8_t counter;
-    int16_t buffer[KSCAN_JS_NSAMPLES][2];
+struct kscan_joystick_ema {
+    bool initialized;
+    float x_filtered;
+    float y_filtered;
 };
 
 struct kscan_joystick_data {
@@ -77,7 +78,7 @@ struct kscan_joystick_data {
     // structs
     struct adc_sequence adc_sequence;
     struct kscan_joystick_calibration calibration;
-    struct kscan_joystick_sma sma;
+    struct kscan_joystick_ema ema;
     // buffers
     int16_t adc_buffer[2];
     uint16_t key_state[8];
@@ -149,21 +150,17 @@ static bool kscan_joystick_calibration_handler(struct kscan_joystick_calibration
     return true;
 }
 
-static void kscan_joystick_apply_sma(struct kscan_joystick_sma *sma, int16_t *x, int16_t *y) {
-    // Add the values to the buffer
-    sma->buffer[sma->counter][0] = *x;
-    sma->buffer[sma->counter][1] = *y;
-    // Increment the counter
-    sma->counter = (sma->counter + 1) % KSCAN_JS_NSAMPLES;
-    // Average the values in the buffer
-    int32_t sum_x = 0, sum_y = 0;
-    for (uint8_t i = 0; i < KSCAN_JS_NSAMPLES; i++) {
-        sum_x += sma->buffer[i][0];
-        sum_y += sma->buffer[i][1];
+static void kscan_joystick_apply_ema(struct kscan_joystick_ema *ema, int16_t *x_raw, int16_t *y_raw) {
+    if (!ema->initialized) {
+        ema->x_filtered = *x_raw;
+        ema->x_filtered = *y_raw;
+        ema->initialized = true;
+    } else {
+        ema->x_filtered = ((KSCAN_JE_ALPHA) * (*x_raw)) + ((1.0f - KSCAN_JE_ALPHA) * (ema->x_filtered));
+        ema->y_filtered = ((KSCAN_JE_ALPHA) * (*y_raw)) + ((1.0f - KSCAN_JE_ALPHA) * (ema->y_filtered));
     }
-    // Write the averaged value
-    *x = (int16_t)(sum_x / KSCAN_JS_NSAMPLES);
-    *y = (int16_t)(sum_y / KSCAN_JS_NSAMPLES);
+    *x_raw = (int16_t)ema->x_filtered;
+    *y_raw = (int16_t)ema->y_filtered;
 }
 
 static void kscan_joystick_apply_angle_hysteris(float *angle, float *prev) {
@@ -194,7 +191,7 @@ static void kscan_joystick_work_handler(struct k_work *work) {
     const struct device *dev = data->dev;
     const struct kscan_joystick_config *config = dev->config;
     struct kscan_joystick_calibration *calibration = &data->calibration;
-    struct kscan_joystick_sma *sma = &data->sma;
+    struct kscan_joystick_ema *ema = &data->ema;
     
     int ret;
 
@@ -214,8 +211,8 @@ static void kscan_joystick_work_handler(struct k_work *work) {
     // Update the calibration
     if (kscan_joystick_calibration_handler(calibration, x_raw, y_raw)) {
 
-        // Apply a simple moving average
-        kscan_joystick_apply_sma(sma, &x_raw, &y_raw);
+        // Apply an exponential moving average
+        kscan_joystick_apply_ema(ema, &x_raw, &y_raw);
 
         // LOG_DBG("RAW ADC CH0: %d, CH1: %d", x_raw, y_raw);
 
@@ -364,7 +361,7 @@ static int kscan_joystick_init(const struct device *dev) {
     struct kscan_joystick_data *data = dev->data;
     const struct kscan_joystick_config *config = dev->config;
     struct kscan_joystick_calibration *calibration = &data->calibration;
-    struct kscan_joystick_sma *sma = &data->sma;
+    struct kscan_joystick_ema *ema = &data->ema;
     int err = 0;
 
     data->dev = dev;
@@ -376,8 +373,9 @@ static int kscan_joystick_init(const struct device *dev) {
     data->idle_timeout = 0;
     // Initialise smoothing filters
     data->prev_angle = 0;
-    sma->counter = 0;
-    memset(sma->buffer, 0, sizeof(sma->buffer));
+    ema->x_filtered = 0;
+    ema->y_filtered = 0;
+    ema->initialized = false;
     // Initialise calibration variables
     calibration->center[0] = 2047;
     calibration->center[1] = 2047;
