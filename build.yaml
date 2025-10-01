@@ -20,6 +20,13 @@
 ---
 include:
   - board: nice_nano_v2
-    shield: joystick_wasd
-    snippet: studio-rpc-usb-uart zmk-usb-logging
+    shield: settings_reset
+  - board: nice_nano_v2
+    shield: joystick_wasd_dongle
+    snippet: studio-rpc-usb-uart
     cmake-args: -DCONFIG_ZMK_STUDIO=y
+  - board: nice_nano_v2
+    shield: joystick_wasd
+    # snippet: studio-rpc-usb-uart
+    # cmake-args: -DCONFIG_ZMK_STUDIO=y
+    cmake-args: -DCONFIG_ZMK_SPLIT=y -DCONFIG_ZMK_SPLIT_ROLE_CENTRAL=n
