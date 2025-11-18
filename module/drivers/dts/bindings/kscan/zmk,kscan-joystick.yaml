@@ -22,6 +22,10 @@ properties:
     type: int
     default: 100
     description: Time between reads in milliseconds when joystick is in the center.
+  idle-timeout-ms:
+    type: int
+    default: 300000
+    description: Timeout in milliseconds before the kscan switches to use idle-period-ms.
   angle-offset:
     type: int
     default: 0

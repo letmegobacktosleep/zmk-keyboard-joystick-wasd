@@ -53,7 +53,6 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define KSCAN_JA_HYSTERIS 1.0f
 /* Idle timeout threshold */
 #define KSCAN_JI_THRESHOLD 3
-#define KSCAN_JI_NSCANS 1000
 
 struct kscan_joystick_calibration {
     bool is_active;
@@ -91,6 +90,7 @@ struct kscan_joystick_data {
 struct kscan_joystick_config {
     struct adc_dt_spec adc_0;
     struct adc_dt_spec adc_1;
+    int32_t idle_timeout_ms;
     int32_t idle_period_ms;
     int32_t poll_period_ms;
     int16_t angle_offset;
@@ -302,14 +302,14 @@ static void kscan_joystick_work_handler(struct k_work *work) {
 
         // Check whether it is in the center
         if (magnitude < KSCAN_JI_THRESHOLD) {
-            data->idle_timeout++;
+            data->idle_timeout += config->poll_period_ms;
         } else {
             data->idle_timeout = 0;
         }
     }
 
     // Schedule next scan at a longer interval
-    if (data->idle_timeout > KSCAN_JI_NSCANS) {
+    if (data->idle_timeout > config->idle_timeout_ms) {
         k_work_reschedule(&data->work, K_MSEC(config->idle_period_ms));
         return;
     }
@@ -476,6 +476,7 @@ static const struct kscan_driver_api kscan_joystick_api = {
     static const struct kscan_joystick_config kscan_joystick_config_##n = {                         \
         .poll_period_ms = DT_INST_PROP_OR(n, poll_period_ms, 10),                                   \
         .idle_period_ms = DT_INST_PROP_OR(n, idle_period_ms, 100),                                  \
+        .idle_timeout_ms = DT_INST_PROP_OR(n, idle_timeout_ms, 300000),                             \
         .adc_0 = ADC_DT_SPEC_INST_GET_BY_IDX(n, 0),                                                 \
         .adc_1 = ADC_DT_SPEC_INST_GET_BY_IDX(n, 1),                                                 \
         .angle_offset   = DT_INST_PROP_OR(n, angle_offset, 0),                                      \
