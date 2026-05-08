@@ -7,9 +7,21 @@
     #size-cells = <0>;
 	status = "okay";
 
+    /*
     channel@0 {
         reg = <0>;
         zephyr,input-positive = <NRF_SAADC_AIN0>;
+        zephyr,gain = "ADC_GAIN_1_6";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,resolution = <12>;
+        zephyr,oversampling = <0>;
+    };
+    */
+
+    channel@5 {
+        reg = <0>;
+        zephyr,input-positive = <NRF_SAADC_AIN5>;
         zephyr,gain = "ADC_GAIN_1_6";
         zephyr,reference = "ADC_REF_INTERNAL";
         zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
@@ -32,51 +44,56 @@
 
     kscan0: kscan_composite {
         compatible = "zmk,kscan-composite";
-        rows = <6>;
-        columns = <4>;
+        rows    = <5>;
+        columns = <6>;
 
-        // Include the direct driver
+        // Include the matrix GPIO driver
         direct {
             kscan = <&kscan1>;
         };
 
-        // Include the matrix GPIO driver...
+        // Include the direct GPIO driver...
         matrix {
             kscan = <&kscan2>;
-            row-offset = <1>; // ...and shift it to not overlap
+            row-offset = <3>;
+            col-offset = <4>;
         };
 
-        // Include the direct GPIO driver...
-        direct_two {
+        // Include the joystick driver...
+        kscan_joystick {
             kscan = <&kscan3>;
-            row-offset = <4>; // ...and shift it to not overlap
+            row-offset = <4>;
+            col-offset = <0>;
         };
     };
 
-    kscan1: kscan_direct {
-        compatible = "zmk,kscan-gpio-direct";
-        wakeup-source;
-        input-gpios
-            = <&gpio0 6  (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
-            , <&gpio0 8  (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
-            ;
-    };
-
-    kscan2: kscan_matrix {
+    kscan1: kscan_matrix {
         compatible = "zmk,kscan-gpio-matrix";
         diode-direction = "col2row";
         wakeup-source;
 
         col-gpios
-            = <&gpio1 0  GPIO_ACTIVE_HIGH>
+            = <&gpio1 13 GPIO_ACTIVE_HIGH>
+            , <&gpio0 6  GPIO_ACTIVE_HIGH>
+            , <&gpio1 15 GPIO_ACTIVE_HIGH>
             , <&gpio0 11 GPIO_ACTIVE_HIGH>
-            , <&gpio1 4  GPIO_ACTIVE_HIGH>
+            , <&gpio0 17 GPIO_ACTIVE_HIGH>
+            , <&gpio0 8  GPIO_ACTIVE_HIGH>
             ;
 
         row-gpios
-            = <&gpio1 1  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
-            , <&gpio1 2  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
-            , <&gpio1 7  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+            = <&gpio0 20 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+            , <&gpio0 22 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+            , <&gpio0 24 (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+            , <&gpio1 0  (GPIO_ACTIVE_HIGH | GPIO_PULL_DOWN)>
+            ;
+    };
+
+    kscan2: kscan_direct {
+        compatible = "zmk,kscan-gpio-direct";
+        wakeup-source;
+        input-gpios
+            = <&gpio0 2  (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
             ;
     };
 
@@ -88,28 +105,20 @@
         /* do not use a second threshold with bad quality joysticks */
         /* thresholds = [0A 78]; */
         status = "okay";
-        wakeup-source;
-        io-channels = <&adc 0>, <&adc 7>;
+        io-channels = <&adc 7>, <&adc 5>;
         io-channel-names = "x-axis", "y-axis";
     };
 
     default_transform: keymap_transform0 {
         compatible = "zmk,matrix-transform";
-        rows = <6>; // Length of the "row-gpios" array
-        columns = <4>; // Length of the "col-gpios" array
+        rows    = <5>;
+        columns = <6>;
         map = <
-        /*   Key 1  | Key 2 */
-            RC(0,0)  RC(0,1)
-        /*   Key 3  | Key 4  | Key 5 */
-            RC(1,0)  RC(1,1)  RC(1,2)
-        /*   Key 6  | Key 7  | Key 8 */
-            RC(2,0)  RC(2,1)  RC(2,2)
-        /*   Key 9  | Key 10 | Key 11 */
-            RC(3,0)  RC(3,1)  RC(3,2)
-        /*   Key 12 | Key 13 | Key 14 | Key 15 */
+            RC(0,0)  RC(0,1)  RC(0,2)  RC(0,3)  RC(0,4)  RC(0,5)
+            RC(1,0)  RC(1,1)  RC(1,2)  RC(1,3)  RC(1,4)  RC(1,5)
+            RC(2,0)  RC(2,1)  RC(2,2)  RC(2,3)  RC(2,4)  RC(2,5)
+            RC(3,0)  RC(3,1)  RC(3,2)  RC(3,3)  RC(3,4)
             RC(4,0)  RC(4,1)  RC(4,2)  RC(4,3)
-        /*   Key 16 | Key 17 | Key 18 | Key 19 */
-            RC(5,0)  RC(5,1)  RC(5,2)  RC(5,3)
         >;
     };
 
@@ -121,6 +130,6 @@
 };
 
 &physical_layout0 {
-    kscan = <&kscan0>; // Label of the kscan node this layout uses
+    kscan     = <&kscan0>;            // Label of the kscan node this layout uses
     transform = <&default_transform>; // Label of the matrix transform this layout uses
 };
