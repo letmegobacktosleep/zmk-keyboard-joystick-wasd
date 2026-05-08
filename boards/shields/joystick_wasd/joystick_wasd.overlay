@@ -20,7 +20,7 @@
     */
 
     channel@5 {
-        reg = <0>;
+        reg = <5>;
         zephyr,input-positive = <NRF_SAADC_AIN5>;
         zephyr,gain = "ADC_GAIN_1_6";
         zephyr,reference = "ADC_REF_INTERNAL";

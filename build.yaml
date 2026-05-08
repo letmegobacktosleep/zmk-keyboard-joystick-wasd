@@ -29,3 +29,7 @@ include:
     shield: joystick_wasd
     snippet: zmk-usb-logging
     cmake-args: -DCONFIG_ZMK_SPLIT=y -DCONFIG_ZMK_SPLIT_ROLE_CENTRAL=n
+  - board: nice_nano
+    shield: joystick_wasd
+    snippet: zmk-usb-logging studio-rpc-usb-uart
+    cmake-args: -DCONFIG_ZMK_STUDIO=y
