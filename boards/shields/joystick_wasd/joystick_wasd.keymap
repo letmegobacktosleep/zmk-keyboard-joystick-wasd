@@ -16,8 +16,9 @@
                 &kp ESC         &kp N1          &kp N2          &kp N3          &kp N4          &kp N5
                 &kp TAB         &kp Q           &kp W           &kp E           &kp R           &kp T
                 &kp LSHFT       &kp A           &kp S           &kp D           &kp F           &kp G
-                &kp LCTRL       &kp Z           &kp X           &kp C
-                &kp UP          &kp RIGHT       &kp LEFT        &kp DOWN        &sl 1
+                &kp LCTRL       &kp Z           &kp X           &kp C           &sl 1
+                &kp UP          &kp RIGHT       &kp LEFT        &kp DOWN
+                &kp SPACE       &kp SPACE       &kp SPACE       &kp SPACE
             >;
         };
         layer_1 {
@@ -26,8 +27,9 @@
                 &studio_unlock  &out OUT_USB    &out OUT_BLE    &bt BT_SEL 0    &bt BT_SEL 1    &bt BT_SEL 2
                 &trans          &trans          &trans          &trans          &trans          &trans
                 &trans          &trans          &trans          &trans          &trans          &trans
-                &trans          &trans          &trans          &trans
                 &trans          &trans          &trans          &trans          &tog 2
+                &trans          &trans          &trans          &trans
+                &trans          &trans          &trans          &trans
             >;
         };
         layer_2 {
@@ -36,8 +38,9 @@
                 &trans          &trans          &trans          &trans          &trans          &trans
                 &trans          &trans          &trans          &trans          &trans          &trans
                 &trans          &trans          &trans          &trans          &trans          &trans
-                &trans          &trans          &trans          &trans
                 &trans          &trans          &trans          &trans          &tog 2
+                &trans          &trans          &trans          &trans
+                &trans          &trans          &trans          &trans
             >;
         };
     };
