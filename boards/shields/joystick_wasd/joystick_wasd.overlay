@@ -46,6 +46,7 @@
         compatible = "zmk,kscan-composite";
         rows    = <6>;
         columns = <6>;
+        wakeup-source;
 
         // Include the matrix GPIO driver
         matrix {
