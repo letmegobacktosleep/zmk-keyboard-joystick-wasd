@@ -17,7 +17,7 @@
                 &kp TAB         &kp Q           &kp W           &kp E           &kp R           &kp T
                 &kp LSHFT       &kp A           &kp S           &kp D           &kp F           &kp G
                 &kp LCTRL       &kp Z           &kp X           &kp C
-                &kp N6 &kp N7 &kp N8 &kp N9 &kp N0 /* &kp UP          &kp RIGHT       &kp LEFT        &kp DOWN        &sl 1 */
+                &kp N6 &kp N7 &kp N8 &kp N9 &sl 1 /* &kp UP          &kp RIGHT       &kp LEFT        &kp DOWN        &sl 1 */
             >;
         };
         layer_1 {
