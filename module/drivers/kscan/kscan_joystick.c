@@ -47,8 +47,14 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #define KSCAN_JC_SCALED 127
 #define KSCAN_JC_DEFAULT 1000
 #define KSCAN_JC_SHRINK(n) (((n) * 3) / 4)
-/* Simple moving average constants */
+/* Exponential moving average constants (analog axes) */
 #define KSCAN_JE_ALPHA 0.5f
+/* Exponential moving average constants (button) */
+#define KSCAN_JB_ALPHA 0.2f
+/* IDK parabola curve */
+#define KSCAN_JB_A  0.00208745f
+#define KSCAN_JB_B -0.04988166f
+#define KSCAN_JB_C  0.85935314f
 /* Angle filter constants */
 #define KSCAN_JA_HYSTERIS 1.0f
 /* Idle timeout threshold */
@@ -57,16 +63,19 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 struct kscan_joystick_calibration {
     bool is_active;
     uint8_t counter;
-    uint16_t samples[KSCAN_JC_NSAMPLES][2];
+    uint16_t samples[KSCAN_JC_NSAMPLES][3];
     int16_t center[2];
     int16_t neg_disp[2];
     int16_t pos_disp[2];
+    int16_t rest_pos;
+    int16_t max_pos;
 };
 
 struct kscan_joystick_ema {
     bool initialized;
     float x_filtered;
     float y_filtered;
+    float z_filtered;
 };
 
 struct kscan_joystick_data {
@@ -79,8 +88,11 @@ struct kscan_joystick_data {
     struct kscan_joystick_calibration calibration;
     struct kscan_joystick_ema ema;
     // buffers
-    int16_t adc_buffer[2];
+    int16_t adc_buffer[3];
     uint16_t key_state[8];
+    bool button_state;
+    // buffer indexes
+    uint8_t adc_idx_buf[3];
     // smaller variables
     float prev_angle;
     uint16_t idle_timeout;
@@ -90,6 +102,7 @@ struct kscan_joystick_data {
 struct kscan_joystick_config {
     struct adc_dt_spec adc_0;
     struct adc_dt_spec adc_1;
+    struct adc_dt_spec adc_2;
     int32_t idle_timeout_ms;
     int32_t idle_period_ms;
     int32_t poll_period_ms;
@@ -99,9 +112,10 @@ struct kscan_joystick_config {
     uint8_t hysteris;
     uint8_t thresholds_len;
     uint8_t thresholds[8];
+    int16_t button_threshold;
 };
 
-static bool kscan_joystick_calibration_handler(struct kscan_joystick_calibration *calibration, int16_t x, int16_t y) {
+static bool kscan_joystick_calibration_handler(struct kscan_joystick_calibration *calibration, int16_t x, int16_t y, int16_t z) {
     // Update maximum displacement from the center
     if (x > calibration->center[0]) {
         // x is greater than the center, update displacement in the positive direction
@@ -117,22 +131,29 @@ static bool kscan_joystick_calibration_handler(struct kscan_joystick_calibration
         // y is less than or equal to the center, displacement in the update negative direction
         calibration->neg_disp[1] = MAX(calibration->neg_disp[1], calibration->center[1] - y);
     }
+    // Update maximum displacement for the button
+    if (z > calibration->max_pos) {
+        calibration->max_pos = z;
+    }
     // Update center
     if (calibration->is_active) {
         // Write the analog values to the buffer
         calibration->samples[calibration->counter][0] = x;
         calibration->samples[calibration->counter][1] = y;
+        calibration->samples[calibration->counter][2] = z;
         // Check whether enough samples have been collected
         if (++calibration->counter >= KSCAN_JC_NSAMPLES) {
             // Sum the samples
-            int32_t sum_x = 0, sum_y = 0;
+            int32_t sum_x = 0, sum_y = 0, sum_z = 0;
             for (uint8_t i = 0; i < KSCAN_JC_NSAMPLES; i++){
                 sum_x += calibration->samples[i][0];
                 sum_y += calibration->samples[i][1];
+                sum_z += calibration->samples[i][2];
             }
             // Write the new calibration
             calibration->center[0] = (int16_t)(sum_x / KSCAN_JC_NSAMPLES);
             calibration->center[1] = (int16_t)(sum_y / KSCAN_JC_NSAMPLES);
+            calibration->rest_pos  = (int16_t)(sum_z / KSCAN_JC_NSAMPLES);
             // Shrink the neg_disp & pos_disp values
             calibration->neg_disp[0] = KSCAN_JC_SHRINK(calibration->neg_disp[0]);
             calibration->pos_disp[0] = KSCAN_JC_SHRINK(calibration->pos_disp[0]);
@@ -150,17 +171,20 @@ static bool kscan_joystick_calibration_handler(struct kscan_joystick_calibration
     return true;
 }
 
-static void kscan_joystick_apply_ema(struct kscan_joystick_ema *ema, int16_t *x_raw, int16_t *y_raw) {
+static void kscan_joystick_apply_ema(struct kscan_joystick_ema *ema, int16_t *x_raw, int16_t *y_raw, int16_t *z_raw) {
     if (!ema->initialized) {
         ema->x_filtered = *x_raw;
-        ema->x_filtered = *y_raw;
+        ema->y_filtered = *y_raw;
+        ema->z_filtered = *z_raw;
         ema->initialized = true;
     } else {
         ema->x_filtered = ((KSCAN_JE_ALPHA) * (*x_raw)) + ((1.0f - KSCAN_JE_ALPHA) * (ema->x_filtered));
         ema->y_filtered = ((KSCAN_JE_ALPHA) * (*y_raw)) + ((1.0f - KSCAN_JE_ALPHA) * (ema->y_filtered));
+        ema->z_filtered = ((KSCAN_JB_ALPHA) * (*z_raw)) + ((1.0f - KSCAN_JB_ALPHA) * (ema->z_filtered));
     }
     *x_raw = (int16_t)ema->x_filtered;
     *y_raw = (int16_t)ema->y_filtered;
+    *z_raw = (int16_t)ema->z_filtered;
 }
 
 static void kscan_joystick_apply_angle_hysteris(float *angle, float *prev) {
@@ -205,20 +229,27 @@ static void kscan_joystick_work_handler(struct k_work *work) {
         goto schedule_next;
     }
 
-    int16_t x_raw = data->adc_buffer[0];
-    int16_t y_raw = data->adc_buffer[1];
+    int16_t x_raw = data->adc_buffer[data->adc_idx_buf[0]];
+    int16_t y_raw = data->adc_buffer[data->adc_idx_buf[1]];
+    int16_t z_raw = data->adc_buffer[data->adc_idx_buf[2]];
+    if (z_raw >= 2048) {
+        z_raw = z_raw - 2048;
+    } else {
+        z_raw = 2047 - z_raw;
+    }
 
     // Update the calibration
-    if (kscan_joystick_calibration_handler(calibration, x_raw, y_raw)) {
+    if (kscan_joystick_calibration_handler(calibration, x_raw, y_raw, z_raw)) {
 
         // Apply an exponential moving average
-        kscan_joystick_apply_ema(ema, &x_raw, &y_raw);
+        kscan_joystick_apply_ema(ema, &x_raw, &y_raw, &z_raw);
 
-        // LOG_DBG("RAW ADC CH0: %d, CH1: %d", x_raw, y_raw);
+        // LOG_DBG("RAW ADC CH0: %d, CH1: %d, CH2: %d", x_raw, y_raw, z_raw);
 
         // Offset the ADC values
         int16_t x = x_raw - calibration->center[0];
         int16_t y = y_raw - calibration->center[1];
+        int16_t z = z_raw - calibration->rest_pos;
         // Scale the ADC values between -127 and 127
         x = (x > 0)?
             ((x * KSCAN_JC_SCALED) / calibration->pos_disp[0]):
@@ -227,7 +258,19 @@ static void kscan_joystick_work_handler(struct k_work *work) {
             ((y * KSCAN_JC_SCALED) / calibration->pos_disp[1]):
             ((y * KSCAN_JC_SCALED) / calibration->neg_disp[1]);
 
-        // LOG_DBG("CAL ADC CH0: %d, CH1: %d", x, y);
+        // Offset the ADC value based on the x-axis
+        // Note: only accurate when button is not pressed, data was too noisy when pressed
+        z -= (int16_t)(
+            (
+                KSCAN_JB_A * powf((float)x, 2.0f) +
+                KSCAN_JB_B * (float)x +
+                KSCAN_JB_C
+            ) * (
+                calibration->max_pos - z
+            ) / calibration->max_pos
+        );
+
+        // LOG_DBG("CAL ADC CH0: %d, CH1: %d, CH2: %d, CH2_MAX: %d", x, y, z, calibration->max_pos);
 
         // Calculate angle
         float angle_rad = atan2f((float)y, (float)x);
@@ -300,6 +343,20 @@ static void kscan_joystick_work_handler(struct k_work *work) {
             }
         }
 
+        // Check the z-axis (button) against a basic threshold
+        if (z > config->button_threshold) {
+            if (!data->button_state) {
+                data->callback(dev, 0, 4, true);
+                data->button_state = true;
+            }
+        }
+        else if (z < config->button_threshold - config->hysteris) {
+            if (data->button_state) {
+                data->callback(dev, 0, 4, false);
+                data->button_state = false;
+            }
+        }
+
         // Check whether it is in the center
         if (magnitude < KSCAN_JI_THRESHOLD) {
             data->idle_timeout += config->poll_period_ms;
@@ -332,7 +389,6 @@ static int kscan_joystick_configure(const struct device *dev, kscan_callback_t c
 
 static int kscan_joystick_enable(const struct device *dev) {
     struct kscan_joystick_data *data = dev->data;
-    const struct kscan_joystick_config *config = dev->config;
     struct kscan_joystick_calibration *calibration = &data->calibration;
 
     LOG_DBG("Joystick kscan enabled - starting ADC polling");
@@ -341,8 +397,8 @@ static int kscan_joystick_enable(const struct device *dev) {
     calibration->counter = 0;
     calibration->is_active = true;
     
-    // Start periodic ADC scanning
-    k_work_reschedule(&data->work, K_MSEC(config->poll_period_ms));
+    // Start periodic ADC scanning after 10ms
+    k_work_reschedule(&data->work, K_MSEC(10));
     
     return 0;
 }
@@ -373,8 +429,9 @@ static int kscan_joystick_init(const struct device *dev) {
     data->idle_timeout = 0;
     // Initialise smoothing filters
     data->prev_angle = 0;
-    ema->x_filtered = 0;
-    ema->y_filtered = 0;
+    ema->x_filtered = 2047;
+    ema->y_filtered = 2047;
+    ema->z_filtered = 2057;
     ema->initialized = false;
     // Initialise calibration variables
     calibration->center[0] = 2047;
@@ -383,6 +440,8 @@ static int kscan_joystick_init(const struct device *dev) {
     calibration->pos_disp[0] = KSCAN_JC_DEFAULT;
     calibration->neg_disp[1] = KSCAN_JC_DEFAULT;
     calibration->pos_disp[1] = KSCAN_JC_DEFAULT;
+    calibration->rest_pos = 4095;
+    calibration->max_pos  = 400;
     // Trigger a calibration
     calibration->counter = 0;
     calibration->is_active = true;
@@ -390,13 +449,16 @@ static int kscan_joystick_init(const struct device *dev) {
 
     // Check both channels belong to same device for sequence scan
     __ASSERT(config->adc_0.dev == config->adc_1.dev,
-        "Both ADC channels must belong to the same device.");
-
-    data->adc_sequence.buffer = data->adc_buffer;
-    data->adc_sequence.buffer_size = sizeof(data->adc_buffer);
+        "ADC channels 0 and 1 must belong to the same device.");
+    __ASSERT(config->adc_1.dev == config->adc_2.dev,
+        "ADC channels 1 and 2 must belong to the same device.");
 
     adc_sequence_init_dt(&config->adc_0, &data->adc_sequence);
     data->adc_sequence.channels |= BIT(config->adc_1.channel_id);
+    data->adc_sequence.channels |= BIT(config->adc_2.channel_id);
+
+    data->adc_sequence.buffer = data->adc_buffer;
+    data->adc_sequence.buffer_size = sizeof(data->adc_buffer);
 
     if (!adc_is_ready_dt(&config->adc_0)) {
         LOG_ERR("ADC device is not ready");
@@ -415,8 +477,29 @@ static int kscan_joystick_init(const struct device *dev) {
             err);
         return err;
     }
+    err = adc_channel_setup_dt(&config->adc_2);
+    if (err) {
+        LOG_ERR("failed to configure ADC channel 2 (err %d)",
+            err);
+        return err;
+    }
 
     LOG_INF("ADC-based kscan initialized successfully");
+
+    // Calculate the correct buffer indexes
+    uint8_t ids[3] = {
+        config->adc_0.channel_id,
+        config->adc_1.channel_id,
+        config->adc_2.channel_id
+    };
+    for (int i = 0; i < 3; i++) {
+        if (ids[0] > ids[i]) data->adc_idx_buf[0]++;
+        if (ids[1] > ids[i]) data->adc_idx_buf[1]++;
+        if (ids[2] > ids[i]) data->adc_idx_buf[2]++;
+    }
+
+    LOG_INF("ADC Mapping: X=%d, Y=%d, BTN=%d", 
+            data->adc_idx_buf[0], data->adc_idx_buf[1], data->adc_idx_buf[2]);
 
     // Initialize the work queue
     k_work_init_delayable(&data->work, kscan_joystick_work_handler);
@@ -479,12 +562,14 @@ static const struct kscan_driver_api kscan_joystick_api = {
         .idle_timeout_ms = DT_INST_PROP_OR(n, idle_timeout_ms, 300000),                             \
         .adc_0 = ADC_DT_SPEC_INST_GET_BY_IDX(n, 0),                                                 \
         .adc_1 = ADC_DT_SPEC_INST_GET_BY_IDX(n, 1),                                                 \
+        .adc_2 = ADC_DT_SPEC_INST_GET_BY_IDX(n, 2),                                                 \
         .angle_offset   = DT_INST_PROP_OR(n, angle_offset, 0),                                      \
         .angle_overlap  = DT_INST_PROP_OR(n, angle_overlap, 0),                                     \
         .n_directions   = DT_INST_PROP_OR(n, n_directions, 4),                                      \
         .hysteris       = DT_INST_PROP_OR(n, hysteris, 5),                                          \
         .thresholds_len = DT_INST_PROP_LEN_OR(n, thresholds, 2),                                    \
         .thresholds     = DT_INST_PROP(n, thresholds),                                              \
+        .button_threshold = DT_INST_PROP(n, button_threshold),                                      \
     };                                                                                              \
                                                                                                     \
     PM_DEVICE_DT_INST_DEFINE(n, kscan_joystick_pm_action);                                          \

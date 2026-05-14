@@ -7,7 +7,6 @@
     #size-cells = <0>;
 	status = "okay";
 
-    /*
     channel@0 {
         reg = <0>;
         zephyr,input-positive = <NRF_SAADC_AIN0>;
@@ -17,7 +16,6 @@
         zephyr,resolution = <12>;
         zephyr,oversampling = <0>;
     };
-    */
 
     channel@5 {
         reg = <5>;
@@ -59,7 +57,7 @@
         direct {
             kscan = <&kscan2>;
             row-offset = <4>;
-            col-offset = <4>;
+            col-offset = <5>;
         };
 
         // Include the joystick driver...
@@ -94,10 +92,8 @@
 
     kscan2: kscan_direct {
         compatible = "zmk,kscan-gpio-direct";
-        wakeup-source;
         input-gpios
-            = <&gpio0 2  (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
-            , <&gpio1 11 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
+            = <&gpio1 11 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>
             ;
     };
 
@@ -108,9 +104,10 @@
         angle-overlap = <30>;
         /* do not use a second threshold with bad quality joysticks */
         thresholds = [0A 78];
+        button-threshold = <50>;
         status = "okay";
-        io-channels = <&adc 7>, <&adc 5>;
-        io-channel-names = "x-axis", "y-axis";
+        io-channels = <&adc 5>, <&adc 7>, <&adc 0>;
+        io-channel-names = "x-axis", "y-axis", "button";
     };
 
     default_transform: matrix_transform0 {

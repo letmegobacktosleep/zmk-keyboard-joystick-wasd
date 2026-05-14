@@ -42,6 +42,10 @@ properties:
     type: uint8-array
     default: [0x0A]
     description: The magnitude thresholds (rows) inferred from the joystick.
+  button-threshold:
+    type: int
+    default: 100
+    description: The threshold for the 'button' when you push down the joystick.
   hysteris:
     type: int
     default: 5
